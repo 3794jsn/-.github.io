@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>商恒主服务器 - 手机竖屏监控面板</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif; }
+        :root {
+            --primary: #165DFF;
+            --success: #00B42A;
+            --warning: #FF7D00;
+            --danger: #F53F3F;
+            --info: #86909C;
+            --dark: #1D2129;
+            --light: #FFFFFF;
+            --bg: #F7F8FA;
+            --card-bg: #FFFFFF;
+            --border: #E5E6EB;
+            --shadow: 0 2px 12px rgba(0,0,0,0.08);
+            --attack-shadow: 0 0 15px rgba(245, 63, 63, 0.3);
+        }
+        body { 
+            background-color: var(--bg); 
+            color: var(--dark); 
+            padding: 15px; 
+            transition: all 0.3s ease;
+            overflow-x: hidden;
+            position: relative; /* 为攻击弹窗做父容器定位 */
+        }
+        .container { max-width: 100%; margin: 0 auto; }
+        /* 头部优化 */
+        .header { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+        .header-top { display: flex; justify-content: space-between; align-items: center; }
+        .header-title h1 { font-size: 22px; color: var(--primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+        .header-title .server-tag { background-color: var(--primary); color: white; padding: 2px 8px; border-radius: 15px; font-size: 12px; font-weight: 500; margin-left: 8px; }
+        .current-time { font-size: 14px; color: var(--info); display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+        .refresh-btn { background-color: var(--primary); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background-color 0.2s; }
+        .refresh-btn:hover { background-color: #0E4BDB; }
+
+        /* 网格布局（手机竖屏优化） */
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .card { 
+            background-color: var(--card-bg); 
+            border-radius: 10px; 
+            padding: 18px; 
+            box-shadow: var(--shadow); 
+            transition: all 0.3s ease; 
+            border: 1px solid var(--border);
+        }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .card.under-attack { border-color: var(--danger); box-shadow: var(--attack-shadow); animation: attackPulse 1s infinite alternate; }
+        @keyframes attackPulse { from { box-shadow: var(--attack-shadow); } to { box-shadow: 0 0 20px rgba(245, 63, 63, 0.5); } }
+        /* 通栏卡片 */
+        .card.full-width { grid-column: span 2; }
+
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .card-header h3 { font-size: 15px; color: var(--dark); margin: 0; display: flex; align-items: center; gap: 6px; }
+        .card-header h3 i { font-size: 16px; color: var(--primary); }
+        .card-status { padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .status-normal { background-color: rgba(0, 180, 42, 0.1); color: var(--success); }
+        .status-warning { background-color: rgba(255, 125, 0, 0.1); color: var(--warning); }
+        .status-danger { background-color: rgba(245, 63, 63, 0.1); color: var(--danger); }
+        .status-info { background-color: rgba(134, 144, 156, 0.1); color: var(--info); }
+
+        .card-body { margin-bottom: 15px; }
+        .data-item { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .data-label { font-size: 13px; color: var(--info); }
+        .data-value { font-size: 16px; font-weight: 600; color: var(--dark); }
+        .data-value.large { font-size: 18px; }
+        .data-value.success { color: var(--success); }
+        .data-value.warning { color: var(--warning); }
+        .data-value.danger { color: var(--danger); }
+        .data-value.primary { color: var(--primary); }
+
+        /* 进度条优化 */
+        .progress-container { width: 100%; height: 6px; background-color: #F2F3F5; border-radius: 3px; margin-top: 6px; }
+        .progress-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+        .progress-success { background-color: var(--success); }
+        .progress-warning { background-color: var(--warning); }
+        .progress-danger { background-color: var(--danger); }
+
+        /* 防火墙区域优化 */
+        .attack-log { max-height: 120px; overflow-y: auto; padding: 10px; background-color: #FCFCFD; border-radius: 6px; margin-top: 12px; border: 1px solid var(--border); }
+        .log-item { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+        .log-item:last-child { border-bottom: none; }
+        .log-type { font-weight: 500; width: 100%; margin-bottom: 2px; }
+        .log-type.attack { color: var(--danger); }
+        .log-type.defend { color: var(--success); }
+        .log-content { flex: 1; }
+        .log-time { color: var(--info); font-size: 11px; }
+        .defend-btn { 
+            background-color: var(--success); 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            padding: 10px 0; 
+            font-size: 15px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            margin-top: 12px; 
+            transition: background-color 0.2s; 
+            display: none;
+            width: 100%;
+        }
+        .defend-btn.show { display: block; }
+        .defend-btn:hover { background-color: #009A22; }
+        /* 防御中按钮样式 */
+        .defend-btn.defending {
+            background-color: #009A22;
+            animation: defendPulse 0.8s infinite alternate;
+        }
+        @keyframes defendPulse {
+            from { opacity: 0.9; transform: scale(1); }
+            to { opacity: 1; transform: scale(1.02); }
+        }
+
+        /* 底部信息 */
+        .footer { text-align: center; padding: 15px 0; color: var(--info); font-size: 12px; border-top: 1px solid var(--border); margin-top: 20px; }
+        .footer-links { display: flex; justify-content: center; gap: 15px; margin-top: 8px; }
+        .footer-links a { color: var(--primary); text-decoration: none; font-size: 11px; }
+        .footer-links a:hover { text-decoration: underline; }
+
+        /* 攻击弹窗（最高层+白色背景） */
+        .attack-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--light); /* 白色背景 */
+            z-index: 9999; /* 最高层级 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 30px;
+            color: var(--dark); /* 黑色文字 */
+            animation: popupFadeIn 0.5s ease;
+            display: none; /* 默认隐藏 */
+            text-align: center;
+        }
+        @keyframes popupFadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .attack-popup.show { display: flex; }
+        .popup-icon { font-size: 60px; color: var(--danger); margin-bottom: 20px; animation: pulse 1.5s infinite alternate; }
+        @keyframes pulse {
+            from { transform: scale(1); }
+            to { transform: scale(1.2); }
+        }
+        .popup-title { font-size: 28px; font-weight: 700; margin-bottom: 15px; color: var(--danger); }
+        .popup-desc { font-size: 18px; margin-bottom: 12px; line-height: 1.6; }
+        .popup-ip { color: var(--primary); font-weight: 600; }
+        /* 弹窗防御按钮 */
+        .popup-defend-btn {
+            background-color: var(--success);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 16px 45px;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: background-color 0.3s;
+        }
+        .popup-defend-btn:hover { background-color: #009A22; }
+        /* 弹窗防御中状态 */
+        .popup-defend-btn.defending {
+            background-color: #009A22;
+            animation: defendPulse 0.8s infinite alternate;
+            pointer-events: none; /* 防御中禁止重复点击 */
+        }
+        /* 防御进度与倒计时容器 */
+        .defend-progress-container {
+            width: 100%;
+            margin-top: 25px;
+        }
+        /* 防御进度条 */
+        .defend-progress {
+            width: 100%;
+            height: 10px;
+            background-color: #F2F3F5;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            display: none;
+        }
+        .defend-progress.show {
+            display: block;
+        }
+        .defend-progress-bar {
+            height: 100%;
+            background-color: var(--success);
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.3s linear;
+        }
+        /* 防御倒计时文字 */
+        .defend-countdown {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--warning);
+            display: none;
+        }
+        .defend-countdown.show {
+            display: block;
+        }
+        /* 攻击剩余时间提示（未防御时） */
+        .attack-remaining-time {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--danger);
+            margin-top: 20px;
+        }
+        /* 防御成功提示 */
+        .defend-success {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 180, 42, 0.95);
+            color: white;
+            padding: 25px 50px;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: 700;
+            z-index: 10000; /* 高于攻击弹窗 */
+            animation: successPop 0.5s ease, successFadeOut 1s ease 1.2s forwards;
+            display: none;
+        }
+        @keyframes successPop {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        @keyframes successFadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .defend-success.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部区域 -->
+        <div class="header">
+            <div class="header-top">
+                <div class="header-title">
+                    <h1>🏢 商恒主服务器</h1>
+                    <span class="server-tag">核心环境</span>
+                </div>
+                <button class="refresh-btn" id="manualRefresh">
+                    <i>🔄</i> 刷新
+                </button>
+            </div>
+            <div class="current-time">
+                <i>📅</i>
+                <span id="currentDateTime">2025-01-01 00:00:00</span>
+            </div>
+        </div>
+
+        <!-- 核心监控网格 -->
+        <div class="grid-layout">
+            <!-- 服务器状态（通栏） -->
+            <div class="card full-width">
+                <div class="card-header">
+                    <h3><i>🖥️</i> 服务器状态</h3>
+                    <span class="card-status status-normal" id="serverOverallStatus">运行正常</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">运行时长</span>
+                        <span class="data-value large success" id="serverUptime">0 天 0 时 0 分 0 秒</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">启动时间</span>
+                        <span class="data-value" id="serverStartTime">2025-01-15 08:30:00</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">系统版本</span>
+                        <span class="data-value">Ubuntu 22.04 LTS 64位</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 公网IP -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i>🌐</i> 公网IP</h3>
+                    <span class="card-status status-normal">已连接</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-value primary" id="publicIp">123.45.67.89</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">内网IP</span>
+                        <span class="data-value">192.168.0.100</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 硬件配置 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i>⚙️</i> 硬件配置</h3>
+                    <span class="card-status status-normal">配置正常</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">CPU</span>
+                        <span class="data-value">8核 3.4GHz</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">内存</span>
+                        <span class="data-value">32GB DDR4</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 资源使用率 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i>📊</i> 资源使用率</h3>
+                    <span class="card-status status-normal" id="resourceStatus">负载正常</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">CPU</span>
+                        <span class="data-value warning" id="cpuUsage">28%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar progress-warning" id="cpuProgress" style="width: 28%"></div>
+                    </div>
+                    <div class="data-item" style="margin-top: 12px;">
+                        <span class="data-label">内存</span>
+                        <span class="data-value" id="memUsage">45%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="memProgress" style="width: 45%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 端口状态 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i>🚪</i> 开放端口</h3>
+                    <span class="card-status status-normal">已放行</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-value">80(HTTP) 443(HTTPS)</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-value">22(SSH) 3306(MySQL)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 并发连接 -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i>👥</i> 连接状态</h3>
+                    <span class="card-status status-normal" id="connectionStatus">连接稳定</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">当前并发</span>
+                        <span class="data-value large primary" id="currentConnections">248</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">异常连接</span>
+                        <span class="data-value" id="abnormalConnections">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 防火墙与攻击防御（通栏） -->
+            <div class="card full-width" id="firewallCard">
+                <div class="card-header">
+                    <h3><i>🛡️</i> 防火墙 & 攻击防御</h3>
+                    <span class="card-status status-normal" id="firewallStatus">防护开启</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">今日拦截次数</span>
+                        <span class="data-value danger" id="todayBlockCount">256</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">当前攻击状态</span>
+                        <span class="data-value" id="currentAttackStatus">无攻击风险</span>
+                    </div>
+                    <div class="data-item">
+                        <span class="data-label">最近攻击IP</span>
+                        <span class="data-value danger" id="latestAttackIp">无</span>
+                    </div>
+
+                    <div class="attack-log" id="attackLogContainer">
+                        <div class="log-item">
+                            <span class="log-type">系统日志</span>
+                            <span class="log-content">防火墙防护已启动，无异常攻击</span>
+                            <span class="log-time" id="initialLogTime">刚刚</span>
+                        </div>
+                    </div>
+
+                    <button class="defend-btn" id="defendButton">
+                        🛡️ 立即执行防御措施
+                    </button>
+                </div>
+            </div>
+
+            <!-- 存储与带宽（通栏） -->
+            <div class="card full-width">
+                <div class="card-header">
+                    <h3><i>💾</i> 存储 & 带宽</h3>
+                    <span class="card-status status-normal">正常</span>
+                </div>
+                <div class="card-body">
+                    <div class="data-item">
+                        <span class="data-label">磁盘使用率</span>
+                        <span class="data-value" id="diskUsage">32%</span>
+                        <span class="data-label" style="margin-left: 20px;">存储类型</span>
+                        <span class="data-value">1TB NVMe SSD</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="diskProgress" style="width: 32%"></div>
+                    </div>
+                    <div class="data-item" style="margin-top: 12px;">
+                        <span class="data-label">带宽使用率</span>
+                        <span class="data-value" id="bandwidthUsage">22Mbps</span>
+                        <span class="data-label" style="margin-left: 20px;">带宽规格</span>
+                        <span class="data-value">100Mbps 独享</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部信息 -->
+        <div class="footer">
+            <p>商恒主服务器监控 v2.0 | 数据每2秒刷新 | 攻击每30秒触发</p>
+            <div class="footer-links">
+                <a href="javascript:;" id="showHelp">使用帮助</a>
+                <a href="javascript:;" id="exportLog">导出日志</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 攻击弹窗（最高层+白色背景） -->
+    <div class="attack-popup" id="attackPopup">
+        <div class="popup-icon">⚠️</div>
+        <h2 class="popup-title">商恒主服务器遭受攻击！</h2>
+        <p class="popup-desc">攻击类型：<span id="popupAttackType">SSH暴力破解攻击</span></p>
+        <p class="popup-desc">攻击IP：<span class="popup-ip" id="popupAttackIp">218.18.19.25</span></p>
+        <p class="popup-desc">请立即执行防御，否则系统将在 <span id="attackRemainingSeconds">15</span> 秒后自动防御！</p>
+        <div class="attack-remaining-time">剩余时间：<span id="attackCountdown">15</span> 秒</div>
+        
+        <div class="defend-progress-container">
+            <div class="defend-progress" id="popupDefendProgress">
+                <div class="defend-progress-bar" id="popupDefendProgressBar"></div>
+            </div>
+            <div class="defend-countdown" id="defendCountdownText">防御剩余时间：<span id="defendCountdown">3</span> 秒</div>
+        </div>
+        
+        <button class="popup-defend-btn" id="popupDefendButton">🛡️ 立即防御</button>
+    </div>
+
+    <!-- 防御成功提示 -->
+    <div class="defend-success" id="defendSuccessTip">
+        🎉 防御成功！商恒主服务器恢复正常
+    </div>
+
+    <script>
+        // 核心配置
+        const SERVER_START_TIME = new Date(2025, 0, 15, 8, 30, 0);
+        const ATTACK_INTERVAL = 30000; // 攻击间隔30秒
+        const ATTACK_DURATION = 15000; // 攻击持续15秒
+        const DEFEND_DURATION = 3000; // 防御持续3秒
+        const ATTACK_IP_POOL = [
+            '218.18.19.25', '192.168.10.89', '103.207.32.145', '45.128.196.73',
+            '175.178.201.36', '89.234.15.67', '203.98.12.45', '124.70.18.92'
+        ];
+        const ATTACK_TYPE_POOL = [
+            'SSH暴力破解攻击', 'SQL注入攻击', '端口扫描攻击', 'DDoS流量攻击',
+            'XSS跨站脚本攻击', 'ARP欺骗攻击', 'ICMP洪水攻击', '恶意文件上传攻击'
+        ];
+        let isUnderAttack = false;
+        let attackCount = 0;
+        let defendCount = 0;
+        let attackTimer = null; // 攻击持续计时器
+        let defendProgressTimer = null; // 防御进度计时器
+        let attackCountdownTimer = null; // 攻击倒计时计时器
+        let defendCountdownTimer = null; // 防御倒计时计时器
+
+        // 获取DOM元素
+        const attackPopup = document.getElementById('attackPopup');
+        const popupAttackType = document.getElementById('popupAttackType');
+        const popupAttackIp = document.getElementById('popupAttackIp');
+        const popupDefendButton = document.getElementById('popupDefendButton');
+        const popupDefendProgress = document.getElementById('popupDefendProgress');
+        const popupDefendProgressBar = document.getElementById('popupDefendProgressBar');
+        const defendCountdownText = document.getElementById('defendCountdownText');
+        const defendCountdown = document.getElementById('defendCountdown');
+        const attackRemainingSeconds = document.getElementById('attackRemainingSeconds');
+        const attackCountdown = document.getElementById('attackCountdown');
+        const defendSuccessTip = document.getElementById('defendSuccessTip');
+        const panelDefendButton = document.getElementById('defendButton');
+
+        // 更新当前时间（保持不变）
+        function updateCurrentDateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleString('zh-CN', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            document.getElementById('currentDateTime').textContent = timeStr;
+            return now;
+        }
+
+        // 计算服务器运行时间（保持不变）
+        function calculateServerUptime() {
+            const now = new Date();
+            const diffMs = now - SERVER_START_TIME;
+            const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+            return `${days} 天 ${hours} 时 ${minutes} 分 ${seconds} 秒`;
+        }
+
+        // 模拟动态资源使用率（保持不变）
+        function simulateResourceUsage() {
+            const cpu = Math.floor(Math.random() * 30) + 15;
+            document.getElementById('cpuUsage').textContent = `${cpu}%`;
+            document.getElementById('cpuProgress').style.width = `${cpu}%`;
+            document.getElementById('cpuProgress').className = `progress-bar ${cpu > 40 ? 'progress-danger' : cpu > 30 ? 'progress-warning' : 'progress-success'}`;
+
+            const mem = Math.floor(Math.random() * 20) + 35;
+            document.getElementById('memUsage').textContent = `${mem}%`;
+            document.getElementById('memProgress').style.width = `${mem}%`;
+
+            const disk = Math.floor(Math.random() * 5) + 30;
+            document.getElementById('diskUsage').textContent = `${disk}%`;
+            document.getElementById('diskProgress').style.width = `${disk}%`;
+
+            const bandwidth = Math.floor(Math.random() * 15) + 15;
+            document.getElementById('bandwidthUsage').textContent = `${bandwidth}Mbps`;
+
+            const connections = Math.floor(Math.random() * 100) + 200;
+            document.getElementById('currentConnections').textContent = connections;
+
+            const abnormalConn = isUnderAttack ? Math.floor(Math.random() * 10) + 5 : 0;
+            document.getElementById('abnormalConnections').textContent = abnormalConn;
+        }
+
+        // 生成攻击日志（适配手机样式）
+        function generateAttackLog(attackType, attackIp, isDefended = false) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN');
+            const logItem = document.createElement('div');
+            logItem.className = 'log-item';
+            logItem.innerHTML = `
+                <span class="log-type ${isDefended ? 'defend' : 'attack'}">
+                    ${isDefended ? '防御成功' : '攻击告警'}
+                </span>
+                <span class="log-content">${isDefended ? '已拦截' : '检测到'} ${attackType}（IP：${attackIp}）</span>
+                <span class="log-time">${timeStr}</span>
+            `;
+            const logContainer = document.getElementById('attackLogContainer');
+            logContainer.prepend(logItem);
+            if (logContainer.children.length > 8) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+
+        // 攻击倒计时（未防御时显示）
+        function startAttackCountdown() {
+            let remaining = ATTACK_DURATION / 1000;
+            attackRemainingSeconds.textContent = remaining;
+            attackCountdown.textContent = remaining;
+            
+            clearInterval(attackCountdownTimer);
+            attackCountdownTimer = setInterval(() => {
+                remaining--;
+                attackRemainingSeconds.textContent = remaining;
+                attackCountdown.textContent = remaining;
+                if (remaining <= 0) {
+                    clearInterval(attackCountdownTimer);
+                    if (isUnderAttack) {
+                        defendAttack(true); // 超时自动防御
+                    }
+                }
+            }, 1000);
+        }
+
+        // 防御倒计时（防御时显示）
+        function startDefendCountdown() {
+            let remaining = DEFEND_DURATION / 1000;
+            defendCountdown.textContent = remaining;
+            defendCountdownText.classList.add('show');
+            
+            clearInterval(defendCountdownTimer);
+            defendCountdownTimer = setInterval(() => {
+                remaining--;
+                defendCountdown.textContent = remaining;
+                if (remaining <= 0) {
+                    clearInterval(defendCountdownTimer);
+                    defendCountdownText.classList.remove('show');
+                }
+            }, 1000);
+        }
+
+        // 模拟攻击事件
+        function simulateAttack() {
+            if (isUnderAttack) return;
+
+            isUnderAttack = true;
+            attackCount++;
+
+            const attackType = ATTACK_TYPE_POOL[Math.floor(Math.random() * ATTACK_TYPE_POOL.length)];
+            const attackIp = ATTACK_IP_POOL[Math.floor(Math.random() * ATTACK_IP_POOL.length)];
+
+            // 更新弹窗内容
+            popupAttackType.textContent = attackType;
+            popupAttackIp.textContent = attackIp;
+            // 显示弹窗（最高层+白色背景）
+            attackPopup.classList.add('show');
+            // 启动攻击倒计时
+            startAttackCountdown();
+
+            // 原有状态更新
+            document.getElementById('firewallCard').classList.add('under-attack');
+            document.getElementById('firewallStatus').className = 'card-status status-danger';
+            document.getElementById('firewallStatus').textContent = '遭受攻击';
+            document.getElementById('currentAttackStatus').textContent = `⚠️ ${attackType}`;
+            document.getElementById('currentAttackStatus').className = 'data-value danger';
+            document.getElementById('latestAttackIp').textContent = attackIp;
+            document.getElementById('todayBlockCount').textContent = attackCount;
+            document.getElementById('serverOverallStatus').className = 'card-status status-warning';
+            document.getElementById('serverOverallStatus').textContent = '攻击中';
+            panelDefendButton.classList.add('show');
+
+            generateAttackLog(attackType, attackIp);
+
+            // 攻击持续15秒，超时自动防御
+            clearTimeout(attackTimer);
+            attackTimer = setTimeout(() => {
+                if (isUnderAttack) {
+                    defendAttack(true); // 自动防御标记
+                }
+            }, ATTACK_DURATION);
+        }
+
+        // 防御攻击函数（带倒计时+进度条）
+        function defendAttack(isAutoDefend = false) {
+            if (!isUnderAttack) return;
+
+            defendCount++;
+            const attackIp = document.getElementById('latestAttackIp').textContent;
+            const attackType = document.getElementById('currentAttackStatus').textContent.replace('⚠️ ', '');
+
+            // 1. 清除攻击倒计时
+            clearInterval(attackCountdownTimer);
+
+            // 2. 启动防御动态效果
+            startDefendAnimation();
+
+            // 3. 启动防御倒计时
+            startDefendCountdown();
+
+            // 4. 模拟防御进度（3秒完成）
+            let progress = 0;
+            clearInterval(defendProgressTimer);
+            popupDefendProgress.classList.add('show');
+            defendProgressTimer = setInterval(() => {
+                progress += (100 / (DEFEND_DURATION / 100));
+                popupDefendProgressBar.style.width = `${progress}%`;
+                if (progress >= 100) {
+                    clearInterval(defendProgressTimer);
+                    // 5. 防御完成，更新状态
+                    finishDefend(attackType, attackIp, isAutoDefend);
+                }
+            }, 100);
+        }
+
+        // 启动防御动画
+        function startDefendAnimation() {
+            // 弹窗按钮动画
+            popupDefendButton.textContent = '🛡️ 防御中...';
+            popupDefendButton.classList.add('defending');
+            // 面板按钮动画
+            panelDefendButton.textContent = '🛡️ 防御中...';
+            panelDefendButton.classList.add('defending');
+            // 禁止重复点击
+            popupDefendButton.disabled = true;
+            panelDefendButton.disabled = true;
+        }
+
+        // 完成防御
+        function finishDefend(attackType, attackIp, isAutoDefend) {
+            // 重置防御状态
+            popupDefendButton.textContent = '🛡️ 立即防御';
+            popupDefendButton.classList.remove('defending');
+            panelDefendButton.textContent = '🛡️ 立即执行防御措施';
+            panelDefendButton.classList.remove('defending');
+            popupDefendButton.disabled = false;
+            panelDefendButton.disabled = false;
+            popupDefendProgress.classList.remove('show');
+            popupDefendProgressBar.style.width = '0%';
+
+            // 隐藏攻击弹窗
+            attackPopup.classList.remove('show');
+
+            // 原有状态更新
+            isUnderAttack = false;
+            document.getElementById('firewallCard').classList.remove('under-attack');
+            document.getElementById('firewallStatus').className = 'card-status status-normal';
+            document.getElementById('firewallStatus').textContent = '防护开启';
+            document.getElementById('currentAttackStatus').textContent = '无攻击风险';
+            document.getElementById('currentAttackStatus').className = 'data-value';
+            document.getElementById('serverOverallStatus').className = 'card-status status-normal';
+            document.getElementById('serverOverallStatus').textContent = '运行正常';
+            panelDefendButton.classList.remove('show');
+
+            // 生成防御日志
+            generateAttackLog(attackType, attackIp, true);
+
+            // 显示防御成功提示
+            defendSuccessTip.classList.add('show');
+            setTimeout(() => {
+                defendSuccessTip.classList.remove('show');
+            }, 2500);
+
+            // 清除所有计时器
+            clearTimeout(attackTimer);
+            clearInterval(defendCountdownTimer);
+            defendCountdownText.classList.remove('show');
+        }
+
+        // 手动刷新功能（保持不变）
+        function manualRefreshData() {
+            updateCurrentDateTime();
+            document.getElementById('serverUptime').textContent = calculateServerUptime();
+            simulateResourceUsage();
+
+            const refreshBtn = document.getElementById('manualRefresh');
+            const originalText = refreshBtn.innerHTML;
+            refreshBtn.innerHTML = '<i>✅</i> 已刷新';
+            setTimeout(() => {
+                refreshBtn.innerHTML = originalText;
+            }, 1500);
+        }
+
+        // 绑定事件
+        popupDefendButton.addEventListener('click', () => defendAttack());
+        panelDefendButton.addEventListener('click', () => defendAttack());
+        document.getElementById('manualRefresh').addEventListener('click', manualRefreshData);
+
+        // 初始化函数
+        function init() {
+            updateCurrentDateTime();
+            document.getElementById('serverUptime').textContent = calculateServerUptime();
+            document.getElementById('serverStartTime').textContent = SERVER_START_TIME.toLocaleString('zh-CN').replace(/\//g, '-').split(' ')[0] + ' ' + SERVER_START_TIME.toLocaleTimeString('zh-CN');
+            document.getElementById('initialLogTime').textContent = updateCurrentDateTime().toLocaleTimeString('zh-CN');
+            simulateResourceUsage();
+
+            // 数据每2秒刷新
+            setInterval(() => {
+                updateCurrentDateTime();
+                document.getElementById('serverUptime').textContent = calculateServerUptime();
+                simulateResourceUsage();
+            }, 2000);
+
+            // 攻击每30秒触发一次
+            setInterval(simulateAttack, ATTACK_INTERVAL);
+
+            // 初始触发一次攻击（可选）
+            setTimeout(simulateAttack, 5000);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
